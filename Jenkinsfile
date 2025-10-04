@@ -7,17 +7,23 @@ pipeline {
     
     environment {
         DOCKER_IMAGE = 'nginx:alpine'
-        CONTAINER_NAME = 'nginx-test'
+        CONTAINER_NAME = 'nginx-test-${BUILD_NUMBER}'
         HOST_PORT = '9889'
-        REPO_URL = 'https://github.com/yourusername/your-repo' // Замените на ваш репозиторий
+        REPO_URL = 'https://github.com/Dariong-LN/Continuous-Integration.git'
     }
     
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', 
-                    url: env.REPO_URL,
-                    credentialsId: 'github-credentials' // Создайте в Jenkins credentials для GitHub
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    extensions: [],
+                    userRemoteConfigs: [[
+                        url: env.REPO_URL,
+                        credentialsId: '' // Оставьте пустым если публичный репозиторий
+                    ]]
+                ])
             }
         }
         
@@ -26,7 +32,7 @@ pipeline {
                 script {
                     // Вычисляем MD5 исходного файла
                     def originalMD5 = sh(
-                        script: "md5sum index.html | cut -d' ' -f1",
+                        script: "md5sum index.html | awk '{print \$1}'",
                         returnStdout: true
                     ).trim()
                     env.ORIGINAL_MD5 = originalMD5
@@ -62,7 +68,7 @@ pipeline {
                 script {
                     // Проверяем HTTP статус
                     def response = sh(
-                        script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:${env.HOST_PORT}",
+                        script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:${env.HOST_PORT} || echo '000'",
                         returnStdout: true
                     ).trim()
                     
@@ -82,7 +88,7 @@ pipeline {
                     // Скачиваем файл из контейнера и вычисляем MD5
                     def downloadedMD5 = sh(
                         script: """
-                            curl -s http://localhost:${env.HOST_PORT} | md5sum | cut -d' ' -f1
+                            curl -s http://localhost:${env.HOST_PORT} | md5sum | awk '{print \$1}'
                         """,
                         returnStdout: true
                     ).trim()
@@ -105,6 +111,7 @@ pipeline {
                 // Всегда удаляем контейнер
                 sh "docker stop ${env.CONTAINER_NAME} || true"
                 sh "docker rm ${env.CONTAINER_NAME} || true"
+                echo "Container ${env.CONTAINER_NAME} cleaned up"
             }
         }
         success {
@@ -116,15 +123,15 @@ pipeline {
                 def message = "❌ CI Pipeline Failed\\n" +
                              "Repository: ${env.REPO_URL}\\n" +
                              "Build: ${env.BUILD_URL}\\n" +
-                             "Причина: Проверка не пройдена"
+                             "Job: ${env.JOB_NAME}\\n" +
+                             "Build Number: ${env.BUILD_NUMBER}"
                 
-                // Настройте webhook URL для Telegram бота
                 def telegramURL = 'https://api.telegram.org/bot8460197612:AAGlVp01h1kYvdfLHpusRCXYhZB_fdUPhDc/sendMessage'
                 sh """
-                    curl -s -X POST ${telegramURL} \\
-                    -d chat_id=900951534 \\
-                    -d text="${message}" \\
-                    -d parse_mode=Markdown
+                    curl -s -X POST ${telegramURL} \
+                    -d "chat_id=900951534" \
+                    -d "text=${message}" \
+                    -d "parse_mode=Markdown" || echo "Telegram notification failed"
                 """
             }
             echo 'Pipeline failed! Notification sent.'
