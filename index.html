@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD Test Page</title>
+</head>
+<body>
+    <h1>Hello from CI/CD Pipeline!</h1>
+    <p>This page is served from nginx container</p>
+    <p>Build time: <span id="build-time">TIMESTAMP</span></p>
+    
+    <script>
+        document.getElementById('build-time').textContent = new Date().toLocaleString();
+    </script>
+</body>
+</html>
